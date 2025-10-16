@@ -72,6 +72,7 @@ pip install -e .
   - [Docker Setup](guides/docker_setup.md) - Configure Docker for SWE-bench
   - [Datasets](guides/datasets.md) - Available datasets and how to use them
   - [Create RAG Datasets](guides/create_rag_datasets.md) - Build your own retrieval datasets
+  - [Architecture](guides/ARCHITECTURE.md) - Summary of the project architecture
 - **Reference**
   - [Harness API](reference/harness.md) - Documentation for the evaluation harness
   - [Inference API](reference/inference.md) - Documentation for model inference
