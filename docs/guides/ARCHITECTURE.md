@@ -261,6 +261,14 @@ SWE-bench currently supports 8 programming languages:
 
 ## Repository Architecture for Orchestrating Evaluations
 
+Under the hood, the evaluation runs the following steps:
+1. `run_evaluation.py` starts and loads dataset from HuggingFace.
+2. `test_spec.py` creates TestSpec for each instance.
+3. `docker_build.py` creates container environment. Files in `dockerfiles/` generate Dockerfiles for different languages and configurations. 
+4. `docker_utils.py` applies patch & runs tests.
+5. `grading.py` analyzes test results.
+6. Files in `log_parsers/` extract test results from test framework output (language-specific).
+
 ### Core Components
 
 #### 1. Main Orchestrator: `run_evaluation.py`
@@ -853,6 +861,38 @@ python -m swebench.harness.run_evaluation \
 
 The SWE-bench architecture is designed for extensibility. Most core components are **language-agnostic** and can be reused for new datasets with minimal modifications. Only **language-specific** components need to be added for new languages.
 
+### Dataset Format Requirements
+
+For your new dataset to work with SWE-bench, it must follow this structure:
+
+```jsonl
+{
+  "instance_id": "unique_identifier",
+  "repo": "owner/repo",
+  "problem_statement": "Description of the issue...",
+  "base_commit": "git_commit_hash",
+  "version": "version_key_in_constants",
+  "test_patch": "diff --git a/test/...\n...",
+  "FAIL_TO_PASS": ["test_that_should_pass_after_fix"],
+  "PASS_TO_PASS": ["test_that_should_remain_passing"],
+  "patch": "gold_solution_diff (optional for evaluation)"
+}
+```
+
+**Required fields**:
+- `instance_id`: Unique identifier (e.g., `"kotlinx__coroutines-3456"`)
+- `repo`: GitHub repository (e.g., `"Kotlin/kotlinx.coroutines"`)
+- `base_commit`: Git commit hash where the bug exists
+- `version`: Key in your `MAP_REPO_VERSION_TO_SPECS_KOTLIN` (e.g., `"1.7"`)
+- `test_patch`: Git diff containing new/modified tests that expose the bug
+- `FAIL_TO_PASS`: List of test names that should pass after fix
+- `PASS_TO_PASS`: List of test names that should remain passing
+
+**Optional fields**:
+- `problem_statement`: Human-readable description
+- `patch`: Gold solution (for validation)
+- `hints_text`, `created_at`, etc.
+
 ### Fully Reusable Components (No Modification Needed)
 
 #### 1. Core Orchestration (`run_evaluation.py`)
@@ -938,7 +978,13 @@ python -m swebench.harness.run_evaluation \
 
 ### Language-Specific Components (Required for New Languages)
 
-To add support for a new language (e.g., **Kotlin**), you need to create three files:
+To extend SWE-bench to a new programming language (e.g., Swift), the following steps would be necessary:
+
+1.  **Define Constants**: Add a new file in `swebench/harness/constants/` (e.g., `javascript.py`) to specify repository-specific installation and test commands.
+2.  **Add a Dockerfile Template**: Create a new file in `swebench/harness/dockerfiles/` (e.g., `javascript.py`) that defines the Dockerfile for the new language's environment.
+3.  **Implement a Log Parser**: Create a new log parser in `swebench/harness/log_parsers/` to extract test results from the output of the new language's testing frameworks.
+4. **Update Aggregation Files** (see below)
+5.  **Update `make_test_spec`**: Modify the `make_test_spec` function in `swebench/harness/test_spec/test_spec.py` to generate the appropriate test scripts for the new language.
 
 #### 1. Constants: `constants/kotlin.py`
 
@@ -1187,38 +1233,6 @@ from swebench.harness.dockerfiles.kotlin import (
     get_dockerfile_instance as get_dockerfile_instance_kotlin,
 )
 ```
-
-### Dataset Format Requirements
-
-For your new dataset to work with SWE-bench, it must follow this structure:
-
-```jsonl
-{
-  "instance_id": "unique_identifier",
-  "repo": "owner/repo",
-  "problem_statement": "Description of the issue...",
-  "base_commit": "git_commit_hash",
-  "version": "version_key_in_constants",
-  "test_patch": "diff --git a/test/...\n...",
-  "FAIL_TO_PASS": ["test_that_should_pass_after_fix"],
-  "PASS_TO_PASS": ["test_that_should_remain_passing"],
-  "patch": "gold_solution_diff (optional for evaluation)"
-}
-```
-
-**Required fields**:
-- `instance_id`: Unique identifier (e.g., `"kotlinx__coroutines-3456"`)
-- `repo`: GitHub repository (e.g., `"Kotlin/kotlinx.coroutines"`)
-- `base_commit`: Git commit hash where the bug exists
-- `version`: Key in your `MAP_REPO_VERSION_TO_SPECS_KOTLIN` (e.g., `"1.7"`)
-- `test_patch`: Git diff containing new/modified tests that expose the bug
-- `FAIL_TO_PASS`: List of test names that should pass after fix
-- `PASS_TO_PASS`: List of test names that should remain passing
-
-**Optional fields**:
-- `problem_statement`: Human-readable description
-- `patch`: Gold solution (for validation)
-- `hints_text`, `created_at`, etc.
 
 ### Example: Adding Support for Swift
 
