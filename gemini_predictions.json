@@ -1,0 +1,7 @@
+[
+  {
+    "instance_id": "sympy__sympy-20590",
+    "model_name_or_path": "gemini-2.5-flash",
+    "model_patch": "diff --git a/sympy/core/rules.py b/sympy/core/rules.py\nindex e8e66e850b..4d10113c23 100644\n--- a/sympy/core/rules.py\n+++ b/sympy/core/rules.py\n@@ -10,6 +10,7 @@\n \n \n class DefaultPrinting:\n+    __slots__ = ()\n     def __repr__(self):\n         return self._sympystr(None)\n "
+  }
+]

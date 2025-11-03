@@ -1,0 +1,7 @@
+[
+  {
+    "instance_id": "sympy__sympy-20590",
+    "model_name_or_path": "gpt-4",
+    "model_patch": "diff --git a/sympy/printing/printer.py b/sympy/printing/printer.py\nindex 5644df1..a44e85c 100644\n--- a/sympy/printing/printer.py\n+++ b/sympy/printing/printer.py\n@@ -33,6 +33,7 @@ class DefaultPrinting:\n     \"\"\"\n     Mixin class for defining default _sympystr and _sympyrepr methods.\n     \"\"\"\n+    __slots__ = ()\n\n     def _sympystr(self, printer):\n         \"\"\""
+  }
+]
