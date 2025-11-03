@@ -1,0 +1,7 @@
+[
+  {
+    "instance_id": "sympy__sympy-20590",
+    "model_name_or_path": "gemini-2.0-flash",
+    "model_patch": "--- a/sympy/core/sympify.py\n+++ b/sympy/core/sympify.py\n@@ -505,7 +505,7 @@\n             return eval(a, locals_, global_dict)\n         except (NameError, KeyError):\n             return Symbol(a, **kwargs)\n-        except (TokenError, SyntaxError, ValueError):\n+        except (TokenError, SyntaxError, ValueError, AttributeError):\n             return Symbol(a, **kwargs)\n         except Exception as e:\n             # If eval fails, just pass the string to the Symbol constructor\n"
+  }
+]
