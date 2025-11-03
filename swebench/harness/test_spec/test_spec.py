@@ -145,7 +145,9 @@ class TestSpec:
     @property
     def platform(self):
         if self.arch == "x86_64":
-            return "linux/x86_64"
+            return "linux/amd64"
+        elif self.arch == "amd64":
+            return "linux/amd64"
         elif self.arch == "arm64":
             return "linux/arm64/v8"
         else:
