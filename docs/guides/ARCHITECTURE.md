@@ -186,9 +186,56 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 ---
 
+## Task Structure and Format
+
+Each task instance in the SWE-bench dataset follows a standardized structure that contains all information necessary to evaluate a model's ability to resolve a software engineering issue. The dataset is available on HuggingFace at:
+- [SWE-bench/SWE-bench](https://huggingface.co/datasets/SWE-bench/SWE-bench)
+- [princeton-nlp/SWE-bench](https://huggingface.co/datasets/princeton-nlp/SWE-bench)
+
+### Task Instance Schema
+
+A complete task instance includes the following fields:
+
+**Core Identification Fields:**
+- `instance_id` (str): Unique identifier for the task (e.g., `"django__django-10301"`)
+- `repo` (str): GitHub repository in `owner/repo` format (e.g., `"django/django"`)
+- `version` (str): Repository version key used for dependency configuration (e.g., `"3.0"`)
+
+**Repository State Fields:**
+- `base_commit` (str): Git commit hash where the bug exists and should be fixed
+- `environment_setup_commit` (str): Git commit hash used for environment setup (may differ from base_commit)
+
+**Problem Description Fields:**
+- `problem_statement` (str): Human-readable description of the issue to be resolved
+- `hints_text` (str): Additional context or hints about the problem (may be empty)
+
+**Test Specification Fields:**
+- `test_patch` (str): Git diff containing new or modified tests that expose the bug
+- `FAIL_TO_PASS` (list[str]): List of test names that should change from FAIL to PASS after the fix
+- `PASS_TO_PASS` (list[str]): List of test names that should remain PASS after the fix
+
+**Solution Fields:**
+- `patch` (str): Gold solution patch (optional, used for validation)
+
+**Metadata Fields:**
+- `created_at` (str): Timestamp when the task instance was created
+
+### Evaluation Process
+
+1. **Repository Setup**: Clone the repository and checkout to `base_commit`
+2. **Environment Setup**: Install dependencies based on `version` and `environment_setup_commit`
+3. **Test Application**: Apply `test_patch` to add/modify tests
+4. **Model Patch Application**: Apply the model's generated patch
+5. **Test Execution**: Run the test suite and verify:
+   - All tests in `FAIL_TO_PASS` now pass
+   - All tests in `PASS_TO_PASS` still pass
+6. **Grading**: Determine resolution status (FULL/PARTIAL/NO) based on test results
+
+---
+
 ## Example Tasks
 
-### Python Task Example: Django Issue #29500
+### Python Task Example: Django Issue #10301
 
 **Task Description:**
 ```json
@@ -197,9 +244,13 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "repo": "django/django",
   "problem_statement": "Migrations should not depend on django.contrib.auth models...",
   "base_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222",
+  "environment_setup_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222",
   "version": "3.0",
+  "test_patch": "diff --git a/tests/migrations/test_migrations.py ...\n--- a/tests/migrations/test_migrations.py\n+++ b/tests/migrations/test_migrations.py\n@@ -123,6 +123,7 @@...",
+  "hints_text": "",
+  "created_at": "2023-10-15T10:30:00Z",
   "FAIL_TO_PASS": ["test_remove_permission_after_delete"],
-  "PASS_TO_PASS": ["test_create_permission", "test_update_permission", ...]
+  "PASS_TO_PASS": ["test_create_permission", "test_update_permission", "test_delete_permission"]
 }
 ```
 
@@ -214,10 +265,12 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 **Evaluation Flow:**
 1. **Setup**: Create Docker container with Python 3.9, Django 3.0 dependencies
-2. **Repository**: Clone `django/django`, checkout to `base_commit`
-3. **Patch**: Apply `model_patch` to the repository
-4. **Test**: Apply `test_patch`, run Django test suite
-5. **Grade**: Verify `test_remove_permission_after_delete` now passes, all other tests still pass
+2. **Repository**: Clone `django/django`, checkout to `base_commit` (3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222)
+3. **Environment**: Setup environment using `environment_setup_commit` if different from `base_commit`
+4. **Test Application**: Apply `test_patch` to add/modify tests that expose the bug
+5. **Patch**: Apply `model_patch` to the repository
+6. **Test Execution**: Run Django test suite
+7. **Grade**: Verify `test_remove_permission_after_delete` now passes (FAIL_TO_PASS), all other tests still pass (PASS_TO_PASS)
 
 ### JavaScript Task Example: Chart.js Issue #11234
 
@@ -228,19 +281,25 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "repo": "chartjs/Chart.js",
   "problem_statement": "Fix bar chart rendering with negative values...",
   "base_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
+  "environment_setup_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
   "version": "4.2",
+  "test_patch": "diff --git a/test/specs/scale.linear.tests.js ...\n--- a/test/specs/scale.linear.tests.js\n+++ b/test/specs/scale.linear.tests.js\n@@ -45,6 +45,12 @@...",
+  "hints_text": "Consider the scale calculation when handling negative values",
+  "created_at": "2023-11-20T14:15:00Z",
   "FAIL_TO_PASS": ["test/specs/scale.linear.tests.js::negative values"],
-  "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", ...]
+  "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", "test/specs/scale.linear.tests.js::zero values"]
 }
 ```
 
 **Evaluation Flow:**
 1. **Setup**: Create Docker container with Node.js 21, pnpm, xvfb (for browser tests)
-2. **Repository**: Clone `chartjs/Chart.js`, checkout to `base_commit`
-3. **Build**: Run `pnpm install && pnpm run build`
-4. **Patch**: Apply model's patch
-5. **Test**: Run karma tests with xvfb for headless browser testing
-6. **Grade**: Parse karma output, verify failing test now passes
+2. **Repository**: Clone `chartjs/Chart.js`, checkout to `base_commit` (5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a)
+3. **Environment**: Setup environment using `environment_setup_commit` if different from `base_commit`
+4. **Build**: Run `pnpm install && pnpm run build`
+5. **Test Application**: Apply `test_patch` to add/modify tests for negative value handling
+6. **Patch**: Apply model's patch
+7. **Test Execution**: Run karma tests with xvfb for headless browser testing
+8. **Grade**: Parse karma output, verify failing test now passes (FAIL_TO_PASS), all other tests still pass (PASS_TO_PASS)
 
 ### Multi-Language Support Example
 
@@ -871,8 +930,11 @@ For your new dataset to work with SWE-bench, it must follow this structure:
   "repo": "owner/repo",
   "problem_statement": "Description of the issue...",
   "base_commit": "git_commit_hash",
+  "environment_setup_commit": "git_commit_hash",
   "version": "version_key_in_constants",
   "test_patch": "diff --git a/test/...\n...",
+  "hints_text": "Additional context or hints (may be empty)",
+  "created_at": "2023-10-15T10:30:00Z",
   "FAIL_TO_PASS": ["test_that_should_pass_after_fix"],
   "PASS_TO_PASS": ["test_that_should_remain_passing"],
   "patch": "gold_solution_diff (optional for evaluation)"
@@ -883,15 +945,17 @@ For your new dataset to work with SWE-bench, it must follow this structure:
 - `instance_id`: Unique identifier (e.g., `"kotlinx__coroutines-3456"`)
 - `repo`: GitHub repository (e.g., `"Kotlin/kotlinx.coroutines"`)
 - `base_commit`: Git commit hash where the bug exists
+- `environment_setup_commit`: Git commit hash used for environment setup (may be same as base_commit)
 - `version`: Key in your `MAP_REPO_VERSION_TO_SPECS_KOTLIN` (e.g., `"1.7"`)
 - `test_patch`: Git diff containing new/modified tests that expose the bug
 - `FAIL_TO_PASS`: List of test names that should pass after fix
 - `PASS_TO_PASS`: List of test names that should remain passing
 
-**Optional fields**:
-- `problem_statement`: Human-readable description
-- `patch`: Gold solution (for validation)
-- `hints_text`, `created_at`, etc.
+**Optional but recommended fields**:
+- `problem_statement`: Human-readable description of the issue
+- `hints_text`: Additional context or hints about the problem (may be empty string)
+- `created_at`: Timestamp when the task instance was created
+- `patch`: Gold solution (for validation, not required for evaluation)
 
 ### Fully Reusable Components (No Modification Needed)
 
