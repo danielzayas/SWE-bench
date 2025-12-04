@@ -188,6 +188,18 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 ## Example Tasks
 
+### Task Schema Overview
+
+SWE-bench tasks are distributed as Hugging Face datasets (`SWE-bench/SWE-bench`, `princeton-nlp/SWE-bench`, plus Lite/Verified variants). Each record packages the metadata that the evaluation harness consumes:
+
+- `instance_id`, `repo`, `path`: unique key, repository slug, and the dataset-internal pointer to the stored artifacts for the task.
+- `problem_statement`, `hints_text`, `created_at`: natural language context and timestamps drawn from the linked GitHub issue or pull request.
+- `base_commit`, `environment_setup_commit`, `version`: commits and semantic version tags that determine which code snapshot and dependency recipe to build.
+- `patch`, `test_patch`: gold reference diff and the test instrumentation diff applied before model patches are evaluated.
+- `FAIL_TO_PASS` and `PASS_TO_PASS`: canonical test lists that define the grading contract.
+
+These examples show how a single task instance flows through the evaluation pipeline.
+
 ### Python Task Example: Django Issue #29500
 
 **Task Description:**
@@ -195,9 +207,14 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 {
   "instance_id": "django__django-10301",
   "repo": "django/django",
+  "path": "SWE-bench_Lite/train/django__django-10301",
   "problem_statement": "Migrations should not depend on django.contrib.auth models...",
+  "hints_text": "When auth models are unavailable, permission clean-up should skip touching them.",
+  "created_at": "2020-02-07T18:42:11Z",
   "base_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222",
+  "environment_setup_commit": "d947a2c8cb9a9126c2f61b7a2aa5c50c1f88bc18",
   "version": "3.0",
+  "test_patch": "diff --git a/tests/auth_tests/test_permissions.py b/tests/auth_tests/test_permissions.py\n@@ -1,3 +1,15 @@\n+class PermissionTests(TestCase):\n+    def test_remove_permission_after_delete(self):\n+        ...",
   "FAIL_TO_PASS": ["test_remove_permission_after_delete"],
   "PASS_TO_PASS": ["test_create_permission", "test_update_permission", ...]
 }
@@ -226,9 +243,14 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 {
   "instance_id": "chartjs__Chart.js-11234",
   "repo": "chartjs/Chart.js",
+  "path": "SWE-bench/train/chartjs__Chart.js-11234",
   "problem_statement": "Fix bar chart rendering with negative values...",
+  "hints_text": "Negative-bar stacks need mirrored pixel ratios compared to positive values.",
+  "created_at": "2021-11-12T05:19:44Z",
   "base_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
+  "environment_setup_commit": "2ab174c3160aa95c8e35c77cc6109803bd55eeef",
   "version": "4.2",
+  "test_patch": "diff --git a/test/specs/scale.linear.tests.js b/test/specs/scale.linear.tests.js\n@@ -42,6 +42,15 @@ describe('Linear Scale negative', () => {\n   it('renders stacked bars below zero', () => {\n     ...",
   "FAIL_TO_PASS": ["test/specs/scale.linear.tests.js::negative values"],
   "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", ...]
 }
