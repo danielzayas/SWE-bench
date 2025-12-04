@@ -186,6 +186,32 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 ---
 
+## Task Structure and Format
+
+Each task instance in SWE-bench represents a real-world software engineering issue derived from GitHub pull requests. The dataset follows a standardized format to enable consistent evaluation across different programming languages and repositories.
+
+### Core Task Fields
+
+**Required Fields** (used for evaluation):
+- `instance_id`: Unique identifier in format `owner__repo-pull_number` (e.g., `django__django-10301`)
+- `repo`: Repository in format `owner/repo` (e.g., `django/django`)
+- `base_commit`: Git commit SHA where the issue exists and evaluation begins
+- `version`: Repository version key (maps to dependency specifications in constants)
+- `test_patch`: Git diff containing test(s) that expose the bug (apply to `base_commit`)
+- `FAIL_TO_PASS`: List of test names that should pass after applying a correct solution
+- `PASS_TO_PASS`: List of test names that should remain passing (regression tests)
+
+**Optional Fields** (provide context, not used during evaluation):
+- `problem_statement`: Human-readable description of the issue
+- `patch`: Reference/gold solution as git diff (used for validation/analysis, not evaluation)
+- `hints_text`: Additional context from issue comments (retrieved but currently unused)
+- `created_at`: Timestamp when the original PR was created (ISO 8601 format)
+- `environment_setup_commit`: Alternative commit for environment setup (Python-specific, defaults to `base_commit`)
+
+The evaluation harness uses only the required fields to determine if a model's solution correctly fixes the issue without breaking existing functionality.
+
+---
+
 ## Example Tasks
 
 ### Python Task Example: Django Issue #29500
@@ -198,8 +224,13 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "problem_statement": "Migrations should not depend on django.contrib.auth models...",
   "base_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222",
   "version": "3.0",
+  "test_patch": "diff --git a/tests/auth_tests/test_migrations.py ...\n+    def test_remove_permission_after_delete(self):\n+        # Test implementation\n",
   "FAIL_TO_PASS": ["test_remove_permission_after_delete"],
-  "PASS_TO_PASS": ["test_create_permission", "test_update_permission", ...]
+  "PASS_TO_PASS": ["test_create_permission", "test_update_permission", ...],
+  "patch": "diff --git a/django/contrib/auth/models.py ...\n--- a/django/contrib/auth/models.py\n+++ b/django/contrib/auth/models.py\n@@ -123,6 +123,7 @@...",
+  "hints_text": "The issue is related to migration dependencies...",
+  "created_at": "2019-04-23T14:30:00Z",
+  "environment_setup_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222"
 }
 ```
 
@@ -229,8 +260,12 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "problem_statement": "Fix bar chart rendering with negative values...",
   "base_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
   "version": "4.2",
+  "test_patch": "diff --git a/test/specs/scale.linear.tests.js ...\n+  it('should handle negative values', function() {\n+    // Test implementation\n+  });\n",
   "FAIL_TO_PASS": ["test/specs/scale.linear.tests.js::negative values"],
-  "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", ...]
+  "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", ...],
+  "patch": "diff --git a/src/scales/scale.linear.js ...\n--- a/src/scales/scale.linear.js\n+++ b/src/scales/scale.linear.js\n@@ -45,7 +45,10 @@...",
+  "hints_text": "The scale calculation needs to account for negative bounds",
+  "created_at": "2023-08-15T09:45:22Z"
 }
 ```
 
@@ -869,29 +904,34 @@ For your new dataset to work with SWE-bench, it must follow this structure:
 {
   "instance_id": "unique_identifier",
   "repo": "owner/repo",
-  "problem_statement": "Description of the issue...",
   "base_commit": "git_commit_hash",
   "version": "version_key_in_constants",
   "test_patch": "diff --git a/test/...\n...",
   "FAIL_TO_PASS": ["test_that_should_pass_after_fix"],
   "PASS_TO_PASS": ["test_that_should_remain_passing"],
-  "patch": "gold_solution_diff (optional for evaluation)"
+  "problem_statement": "Description of the issue...",
+  "patch": "gold_solution_diff",
+  "hints_text": "Additional context from issue discussions",
+  "created_at": "2023-01-15T10:30:00Z",
+  "environment_setup_commit": "commit_hash_for_env_setup"
 }
 ```
 
-**Required fields**:
+**Required fields** (must be present for evaluation):
 - `instance_id`: Unique identifier (e.g., `"kotlinx__coroutines-3456"`)
 - `repo`: GitHub repository (e.g., `"Kotlin/kotlinx.coroutines"`)
 - `base_commit`: Git commit hash where the bug exists
-- `version`: Key in your `MAP_REPO_VERSION_TO_SPECS_KOTLIN` (e.g., `"1.7"`)
+- `version`: Key in your language-specific constants (e.g., `"1.7"` in `MAP_REPO_VERSION_TO_SPECS_KOTLIN`)
 - `test_patch`: Git diff containing new/modified tests that expose the bug
-- `FAIL_TO_PASS`: List of test names that should pass after fix
-- `PASS_TO_PASS`: List of test names that should remain passing
+- `FAIL_TO_PASS`: List of test names that should pass after applying correct fix
+- `PASS_TO_PASS`: List of test names that should remain passing (regression tests)
 
-**Optional fields**:
-- `problem_statement`: Human-readable description
-- `patch`: Gold solution (for validation)
-- `hints_text`, `created_at`, etc.
+**Optional fields** (provide context but not used during evaluation):
+- `problem_statement`: Human-readable description of the issue
+- `patch`: Gold/reference solution as git diff (used for validation/analysis only)
+- `hints_text`: Additional context from issue comments or discussions
+- `created_at`: Timestamp in ISO 8601 format (e.g., `"2023-01-15T10:30:00Z"`)
+- `environment_setup_commit`: Alternative commit for dependency installation (Python-specific, defaults to `base_commit` if not provided)
 
 ### Fully Reusable Components (No Modification Needed)
 
