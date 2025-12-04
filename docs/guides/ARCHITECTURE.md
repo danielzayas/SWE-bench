@@ -186,7 +186,46 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 ---
 
-## Example Tasks
+## Tasks
+
+### Task Format
+
+Each SWE-bench task instance follows the `SWEbenchInstance` schema defined in `swebench/harness/constants/__init__.py`. The dataset is available on HuggingFace at [princeton-nlp/SWE-bench](https://huggingface.co/datasets/princeton-nlp/SWE-bench) and [SWE-bench/SWE-bench](https://huggingface.co/datasets/SWE-bench/SWE-bench).
+
+**Required Fields:**
+- `instance_id` (str): Unique identifier in format `owner__repo-pr_number`
+- `repo` (str): GitHub repository in format `owner/repo`
+- `base_commit` (str): Git commit hash representing the repository state before the fix
+- `patch` (str): Gold solution patch (unified diff) containing code changes that resolve the issue (excludes test files)
+- `test_patch` (str): Unified diff patch containing test file modifications
+- `problem_statement` (str): Issue title and body text describing the problem
+- `version` (str): Repository version key used for dependency installation
+- `FAIL_TO_PASS` (str): JSON list of test names that should change from FAIL to PASS after applying the fix
+- `PASS_TO_PASS` (str): JSON list of test names that should remain passing (regression tests)
+
+**Optional Fields:**
+- `hints_text` (str): Issue comments created before the PR's first commit (hints available to developers)
+- `created_at` (str): ISO timestamp when the pull request was created
+- `environment_setup_commit` (str): Commit hash for fetching environment configuration files (e.g., `environment.yml` or `requirements.txt`). Defaults to `base_commit` if not provided.
+
+**Key Distinctions:**
+- `patch`: Contains the actual code fix (production code changes)
+- `test_patch`: Contains test modifications that expose the bug or verify the fix
+- `base_commit`: The repository state where the bug exists
+- `environment_setup_commit`: Used to fetch environment configuration files (e.g., `environment.yml` for conda projects, `requirements.txt` for pip projects) when they differ from `base_commit`
+
+**Why `environment_setup_commit` might differ from `base_commit`:**
+
+In some cases, the environment configuration files needed to set up the testing environment may exist at a different commit than where the bug occurs. For example, in `django__django-10301`:
+- `base_commit`: `76dfa834e7ceeca97cd8e3cfa86651a955aa3f0c` - The commit where the bug exists
+- `environment_setup_commit`: `4fc35a9c3efdc9154efce28cb23cb84f8834517e` - The commit used to fetch `tests/requirements/py3.txt`
+
+This happens when:
+1. The requirements file was updated after the `base_commit` but contains the correct dependencies for testing
+2. The requirements file at `base_commit` is missing or incompatible
+3. The requirements file path changed between commits
+
+During evaluation, the repository code is checked out at `base_commit`, but dependency installation uses the requirements file from `environment_setup_commit`. 
 
 ### Python Task Example: Django Issue #29500
 
@@ -196,8 +235,13 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "instance_id": "django__django-10301",
   "repo": "django/django",
   "problem_statement": "Migrations should not depend on django.contrib.auth models...",
-  "base_commit": "3fe5d0128b7a231c195eff7c5bf3dbd7fd0e8222",
+  "base_commit": "76dfa834e7ceeca97cd8e3cfa86651a955aa3f0c",
   "version": "3.0",
+  "patch": "diff --git a/django/contrib/auth/models.py b/django/contrib/auth/models.py\n--- a/django/contrib/auth/models.py\n+++ b/django/contrib/auth/models.py\n@@ -123,6 +123,7 @@ class Permission(models.Model):\n     name = models.CharField(_('name'), max_length=255)\n     content_type = models.ForeignKey(...)\n     codename = models.CharField(_('codename'), max_length=100)\n+    # Additional changes to resolve the issue...\n",
+  "test_patch": "diff --git a/tests/auth_tests/test_models.py b/tests/auth_tests/test_models.py\n--- a/tests/auth_tests/test_models.py\n+++ b/tests/auth_tests/test_models.py\n@@ -45,6 +45,7 @@ class PermissionTests(TestCase):\n     def test_remove_permission_after_delete(self):\n         # Test that verifies the fix...\n",
+  "hints_text": "Comment from maintainer: 'This looks related to migration dependencies. Check the migration files.'",
+  "created_at": "2020-01-15T10:30:00Z",
+  "environment_setup_commit": "4fc35a9c3efdc9154efce28cb23cb84f8834517e",
   "FAIL_TO_PASS": ["test_remove_permission_after_delete"],
   "PASS_TO_PASS": ["test_create_permission", "test_update_permission", ...]
 }
@@ -229,6 +273,11 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
   "problem_statement": "Fix bar chart rendering with negative values...",
   "base_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
   "version": "4.2",
+  "patch": "diff --git a/src/scales/scale.linear.js b/src/scales/scale.linear.js\n--- a/src/scales/scale.linear.js\n+++ b/src/scales/scale.linear.js\n@@ -45,6 +45,7 @@ class LinearScale extends Scale {\n     calculateTickLimit() {\n       const max = Math.max(...this.values);\n+      // Fix for negative value handling...\n",
+  "test_patch": "diff --git a/test/specs/scale.linear.tests.js b/test/specs/scale.linear.tests.js\n--- a/test/specs/scale.linear.tests.js\n+++ b/test/specs/scale.linear.tests.js\n@@ -123,4 +123,8 @@ describe('LinearScale', () => {\n     it('should handle positive values', () => {\n       // Test implementation...\n     });\n+    it('should handle negative values', () => {\n+      // Test for negative value rendering...\n+    });\n",
+  "hints_text": "User comment: 'The chart breaks when I pass negative values to the bar chart.'",
+  "created_at": "2021-03-20T14:22:00Z",
+  "environment_setup_commit": "5b8a0f5c3d9e1f2a7b8c9d0e1f2a3b4c5d6e7f8a",
   "FAIL_TO_PASS": ["test/specs/scale.linear.tests.js::negative values"],
   "PASS_TO_PASS": ["test/specs/scale.linear.tests.js::positive values", ...]
 }
@@ -236,7 +285,7 @@ This document provides a comprehensive overview of the SWE-bench evaluation orch
 
 **Evaluation Flow:**
 1. **Setup**: Create Docker container with Node.js 21, pnpm, xvfb (for browser tests)
-2. **Repository**: Clone `chartjs/Chart.js`, checkout to `base_commit`
+2. **Repository**: Clone `chartjs/Chart.js`, checkout environment_setup_commit to get and install depedencies, then checkout to `base_commit`
 3. **Build**: Run `pnpm install && pnpm run build`
 4. **Patch**: Apply model's patch
 5. **Test**: Run karma tests with xvfb for headless browser testing
