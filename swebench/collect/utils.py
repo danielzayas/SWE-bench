@@ -85,7 +85,20 @@ class Repo:
             resolved_issues (list): list of issue numbers referenced by PR
         """
         # Define 1. issue number regex pattern 2. comment regex pattern 3. keywords
-        issues_pat = re.compile(r"(\w+)\s+\#(\d+)")
+        #
+        # We support common GitHub closing keywords with flexible punctuation, e.g.:
+        # - "Fixes #123", "Fixes: #123", "Fixes (#123)"
+        # - "Closes https://github.com/org/repo/issues/123"
+        # - "Resolves issue #123"
+        issues_pat = re.compile(
+            r"(?i)\b("
+            + "|".join(sorted(PR_KEYWORDS))
+            + r")\b"
+            r"[\s:()\-\[\]]*"
+            r"(?:issue\s*)?"
+            r"(?:https?://github\.com/[^/\s]+/[^/\s]+/issues/)?"
+            r"#?(\d+)"
+        )
         comments_pat = re.compile(r"(?s)<!--.*?-->")
 
         # Construct text to search over for issue numbers from PR body and commit messages
@@ -101,12 +114,8 @@ class Repo:
         text = comments_pat.sub("", text)
         # Look for issue numbers in text via scraping <keyword, number> patterns
         references = issues_pat.findall(text)
-        resolved_issues_set = set()
-        if references:
-            for word, issue_num in references:
-                if word.lower() in PR_KEYWORDS:
-                    resolved_issues_set.add(issue_num)
-        return list(resolved_issues_set)
+        resolved_issues_set = {issue_num for (_, issue_num) in references} if references else set()
+        return sorted(resolved_issues_set)
 
     def get_all_loop(
         self,
@@ -324,8 +333,9 @@ def extract_patches(pull: dict, repo: Repo) -> tuple[str, str]:
     patch_test = ""
     patch_fix = ""
     for hunk in PatchSet(patch):
+        hunk_path = (hunk.path or "").lower()
         if any(
-            test_word in hunk.path for test_word in ["test", "tests", "e2e", "testing"]
+            test_word in hunk_path for test_word in ["test", "tests", "e2e", "testing"]
         ):
             patch_test += str(hunk)
         else:
